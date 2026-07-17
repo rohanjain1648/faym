@@ -1,0 +1,27 @@
+// AdvancePayoutService.run() -- POST /jobs/advance-payout
+digraph AdvancePayoutFlow {
+  rankdir=TB;
+  fontname="Helvetica";
+  node [fontname="Helvetica", shape=box, style="rounded,filled", fillcolor="#f6f4ee"];
+
+  start [shape=oval, label="POST /jobs/advance-payout\n{user_id?}"];
+  begin_tx [label="BEGIN IMMEDIATE\n(Database.transaction)"];
+  query [label="pending_without_advance(user_id)\nLEFT JOIN sales <-> advance_payouts\nWHERE status='pending' AND advance IS NULL"];
+  loop [shape=diamond, style=filled, fillcolor="#fce8b2", label="more sales\nin work-list?"];
+  compute [label="amount = 10% x earning_paise\n(Decimal, ROUND_HALF_UP)"];
+  insert [shape=diamond, style=filled, fillcolor="#fce8b2", label="INSERT advance_payouts\n(sale_id UNIQUE)"];
+  conflict [label="IntegrityError\n(already advanced) -> skip"];
+  credit [label="WalletService.apply(+amount)\n+ledger 'advance_credit'"];
+  commit [label="COMMIT"];
+  respond [shape=oval, style=filled, fillcolor="#c7e8ca", label="{sales_paid, total_advance_paise,\ndetails[]}"];
+
+  start -> begin_tx -> query -> loop;
+  loop -> compute [label="yes"];
+  compute -> insert;
+  insert -> conflict [label="fails"];
+  insert -> credit [label="succeeds"];
+  conflict -> loop;
+  credit -> loop;
+  loop -> commit [label="no"];
+  commit -> respond;
+}

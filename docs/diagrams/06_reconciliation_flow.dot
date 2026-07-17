@@ -1,0 +1,39 @@
+// ReconciliationService.reconcile() -- POST /sales/{id}/reconcile
+digraph ReconciliationFlow {
+  rankdir=TB;
+  fontname="Helvetica";
+  node [fontname="Helvetica", shape=box, style="rounded,filled", fillcolor="#f6f4ee"];
+  edge [fontname="Helvetica"];
+
+  start [shape=oval, label="POST /sales/{id}/reconcile\n{status}"];
+  valid [shape=diamond, style=filled, fillcolor="#fce8b2", label="status in\n{approved, rejected}?"];
+  err422 [shape=oval, style=filled, fillcolor="#f2c6c2", label="422 ValidationError"];
+  begin_tx [label="BEGIN IMMEDIATE"];
+  found [shape=diamond, style=filled, fillcolor="#fce8b2", label="sale exists?"];
+  err404 [shape=oval, style=filled, fillcolor="#f2c6c2", label="404 NotFoundError"];
+  isPending [shape=diamond, style=filled, fillcolor="#fce8b2", label="sale.status\n== 'pending'?"];
+  err409 [shape=oval, style=filled, fillcolor="#f2c6c2", label="409 ConflictError\n(already settled)"];
+  lookupAdvance [label="advance_paid = matching\nadvance_payouts row, else 0"];
+  isApproved [shape=diamond, style=filled, fillcolor="#fce8b2", label="new_status\n== 'approved'?"];
+  deltaApprove [label="delta = earning - advance_paid"];
+  deltaReject [label="delta = -advance_paid"];
+  markSettled [label="sales.status = new_status\ninsert reconciliations row"];
+  apply [label="WalletService.apply(delta)\n+ledger 'reconciliation_adjustment'"];
+  commit [label="COMMIT"];
+  respond [shape=oval, style=filled, fillcolor="#c7e8ca", label="{adjustment_paise,\nwallet_balance_paise}"];
+
+  start -> valid;
+  valid -> err422 [label="no"];
+  valid -> begin_tx [label="yes"];
+  begin_tx -> found;
+  found -> err404 [label="no"];
+  found -> isPending [label="yes"];
+  isPending -> err409 [label="no"];
+  isPending -> lookupAdvance [label="yes"];
+  lookupAdvance -> isApproved;
+  isApproved -> deltaApprove [label="yes"];
+  isApproved -> deltaReject [label="no"];
+  deltaApprove -> markSettled;
+  deltaReject -> markSettled;
+  markSettled -> apply -> commit -> respond;
+}

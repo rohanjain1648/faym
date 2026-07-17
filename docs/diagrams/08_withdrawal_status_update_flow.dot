@@ -1,0 +1,36 @@
+// WithdrawalService.update_status() -- POST /withdrawals/{id}/status
+digraph WithdrawalStatusUpdateFlow {
+  rankdir=TB;
+  fontname="Helvetica";
+  node [fontname="Helvetica", shape=box, style="rounded,filled", fillcolor="#f6f4ee"];
+
+  start [shape=oval, label="POST /withdrawals/{id}/status\n{status, failure_reason?}"];
+  known [shape=diamond, style=filled, fillcolor="#fce8b2", label="status in\nWithdrawalStatus.ALL?"];
+  err422 [shape=oval, style=filled, fillcolor="#f2c6c2", label="422 ValidationError"];
+  begin_tx [label="BEGIN IMMEDIATE"];
+  found [shape=diamond, style=filled, fillcolor="#fce8b2", label="withdrawal exists?"];
+  err404 [shape=oval, style=filled, fillcolor="#f2c6c2", label="404 NotFoundError"];
+  isTerminal [shape=diamond, style=filled, fillcolor="#fce8b2", label="current status\nin TERMINAL?"];
+  err409 [shape=oval, style=filled, fillcolor="#f2c6c2", label="409 ConflictError\n(already terminal)"];
+  update [label="withdrawals.status = new_status"];
+  isRecoverable [shape=diamond, style=filled, fillcolor="#fce8b2", label="new_status in\nRECOVERABLE?\n(failed/cancelled/rejected)"];
+  refund [label="WalletService.apply(+amount)\n+ledger 'withdrawal_refund'\nrefunded = true"];
+  noRefund [label="refunded = false"];
+  commit [label="COMMIT"];
+  respond [shape=oval, style=filled, fillcolor="#c7e8ca", label="{status, refunded,\nwallet_balance_paise}"];
+
+  start -> known;
+  known -> err422 [label="no"];
+  known -> begin_tx [label="yes"];
+  begin_tx -> found;
+  found -> err404 [label="no"];
+  found -> isTerminal [label="yes"];
+  isTerminal -> err409 [label="yes"];
+  isTerminal -> update [label="no"];
+  update -> isRecoverable;
+  isRecoverable -> refund [label="yes"];
+  isRecoverable -> noRefund [label="no"];
+  refund -> commit;
+  noRefund -> commit;
+  commit -> respond;
+}

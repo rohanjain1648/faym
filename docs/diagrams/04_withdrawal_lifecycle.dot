@@ -1,0 +1,29 @@
+// Withdrawal status state machine. failed/cancelled/rejected are the
+// RECOVERABLE set (trigger a refund); all four end states are TERMINAL
+// (no further transitions allowed once reached).
+digraph WithdrawalLifecycle {
+  rankdir=LR;
+  fontname="Helvetica";
+  node [shape=circle, fontname="Helvetica", style=filled];
+
+  start [shape=point, width=0.15, style=filled, fillcolor="#333333"];
+  initiated [fillcolor="#fce8b2"];
+  processing [fillcolor="#fce8b2"];
+  completed [fillcolor="#c7e8ca", shape=doublecircle];
+  failed [fillcolor="#f2c6c2", shape=doublecircle];
+  cancelled [fillcolor="#f2c6c2", shape=doublecircle];
+  rejected [fillcolor="#f2c6c2", shape=doublecircle];
+
+  start -> initiated [label="request()\nwallet debited"];
+  initiated -> processing [label="provider ack"];
+  initiated -> completed [label="provider success"];
+  processing -> completed [label="provider success"];
+  initiated -> failed [label="provider failure\n(+refund)"];
+  processing -> failed [label="provider failure\n(+refund)"];
+  initiated -> cancelled [label="cancelled\n(+refund)"];
+  processing -> cancelled [label="cancelled\n(+refund)"];
+  initiated -> rejected [label="rejected\n(+refund)"];
+  processing -> rejected [label="rejected\n(+refund)"];
+
+  { rank=same; completed; failed; cancelled; rejected; }
+}

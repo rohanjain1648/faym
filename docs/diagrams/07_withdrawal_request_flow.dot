@@ -1,0 +1,36 @@
+// WithdrawalService.request() -- POST /users/{id}/withdrawals
+digraph WithdrawalRequestFlow {
+  rankdir=TB;
+  fontname="Helvetica";
+  node [fontname="Helvetica", shape=box, style="rounded,filled", fillcolor="#f6f4ee"];
+
+  start [shape=oval, label="POST /users/{id}/withdrawals\n{amount, idempotency_key?}"];
+  amtCheck [shape=diamond, style=filled, fillcolor="#fce8b2", label="amount_paise > 0?"];
+  err422a [shape=oval, style=filled, fillcolor="#f2c6c2", label="422 ValidationError"];
+  begin_tx [label="BEGIN IMMEDIATE"];
+  keyGiven [shape=diamond, style=filled, fillcolor="#fce8b2", label="idempotency_key\nsupplied?"];
+  keyExists [shape=diamond, style=filled, fillcolor="#fce8b2", label="key already\nexists in DB?"];
+  returnExisting [shape=oval, style=filled, fillcolor="#c7e8ca", label="return existing\nwithdrawal (no debit)"];
+  cooldown [shape=diamond, style=filled, fillcolor="#fce8b2", label="latest ACTIVE withdrawal\n< 24h ago?\n(service-owned clock)"];
+  err429 [shape=oval, style=filled, fillcolor="#f2c6c2", label="429 WithdrawalCooldownError\n+retry_after_seconds"];
+  balCheck [shape=diamond, style=filled, fillcolor="#fce8b2", label="amount_paise\n<= wallet balance?"];
+  err422b [shape=oval, style=filled, fillcolor="#f2c6c2", label="422 InsufficientBalanceError"];
+  create [label="INSERT withdrawals\n(status='initiated')"];
+  debit [label="WalletService.apply(-amount)\n+ledger 'withdrawal_debit'"];
+  commit [label="COMMIT"];
+  respond [shape=oval, style=filled, fillcolor="#c7e8ca", label="{id, status:'initiated',\nwallet_balance_paise}"];
+
+  start -> amtCheck;
+  amtCheck -> err422a [label="no"];
+  amtCheck -> begin_tx [label="yes"];
+  begin_tx -> keyGiven;
+  keyGiven -> keyExists [label="yes"];
+  keyExists -> returnExisting [label="yes"];
+  keyExists -> cooldown [label="no"];
+  keyGiven -> cooldown [label="no"];
+  cooldown -> err429 [label="yes"];
+  cooldown -> balCheck [label="no"];
+  balCheck -> err422b [label="no"];
+  balCheck -> create [label="yes"];
+  create -> debit -> commit -> respond;
+}

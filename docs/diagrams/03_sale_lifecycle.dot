@@ -1,0 +1,17 @@
+// Sale status state machine. The advance job is a self-loop: it can fire on
+// a pending sale but never changes its status and never fires twice.
+digraph SaleLifecycle {
+  rankdir=LR;
+  fontname="Helvetica";
+  node [shape=circle, fontname="Helvetica", style=filled, fixedsize=false];
+
+  start [shape=point, width=0.15, style=filled, fillcolor="#333333"];
+  pending [fillcolor="#fce8b2"];
+  approved [fillcolor="#c7e8ca", shape=doublecircle];
+  rejected [fillcolor="#f2c6c2", shape=doublecircle];
+
+  start -> pending [label="sale created"];
+  pending -> pending [label="advance job runs\n(+10% earning,\nUNIQUE(sale_id) guard)", style=dashed];
+  pending -> approved [label="admin reconciles\n(+earning - advance_paid)"];
+  pending -> rejected [label="admin reconciles\n(-advance_paid)"];
+}

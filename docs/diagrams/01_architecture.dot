@@ -1,0 +1,51 @@
+// Layered architecture: HTTP -> composition root -> services -> data access -> DB.
+digraph Architecture {
+  rankdir=TB;
+  fontname="Helvetica";
+  node [fontname="Helvetica", shape=box, style="rounded,filled", fillcolor="#f6f4ee", color="#333333"];
+  edge [fontname="Helvetica", color="#666666"];
+
+  subgraph cluster_http {
+    label="HTTP layer";
+    style=dashed;
+    main [label="app/main.py\n(FastAPI routes)"];
+    schemas [label="app/schemas.py\n(Pydantic models,\nwith_rupees())"];
+  }
+
+  subgraph cluster_root {
+    label="Composition root";
+    style=dashed;
+    container [label="app/container.py\n(Container)"];
+  }
+
+  subgraph cluster_services {
+    label="Service layer";
+    style=dashed;
+    wallet [label="WalletService\n(the only balance writer)"];
+    advance [label="AdvancePayoutService"];
+    reconcile [label="ReconciliationService"];
+    withdrawal [label="WithdrawalService"];
+  }
+
+  subgraph cluster_data {
+    label="Data access layer";
+    style=dashed;
+    repos [label="app/repositories.py\n(8 repository classes)"];
+    db [label="app/database.py\nDatabase: shared SQLite conn,\nRLock, transaction() / read()", shape=cylinder];
+  }
+
+  main -> schemas [style=dotted, dir=none];
+  main -> container;
+  container -> wallet;
+  container -> advance;
+  container -> reconcile;
+  container -> withdrawal;
+  advance -> wallet [label="apply()"];
+  reconcile -> wallet [label="apply()"];
+  withdrawal -> wallet [label="apply()"];
+  wallet -> repos;
+  advance -> repos;
+  reconcile -> repos;
+  withdrawal -> repos;
+  repos -> db;
+}

@@ -1,0 +1,24 @@
+// Entity-relationship diagram matching docs/schema.sql and app/database.py.
+digraph ER {
+  rankdir=LR;
+  fontname="Helvetica";
+  node [shape=record, fontname="Helvetica", style=filled, fillcolor="#f6f4ee"];
+  edge [fontname="Helvetica"];
+
+  users [label="{users|id (PK)\lcreated_at\l}"];
+  wallets [label="{wallets|user_id (PK, FK)\lwithdrawable_balance_paise\lupdated_at\l}"];
+  brands [label="{brands|id (PK)\lname\l}"];
+  sales [label="{sales|id (PK)\luser_id (FK)\lbrand_id (FK)\lstatus\learning_paise\lreconciled_at\l}"];
+  advance_payouts [label="{advance_payouts|id (PK)\lsale_id (FK, UNIQUE)\luser_id (FK)\lamount_paise\l}"];
+  reconciliations [label="{reconciliations|id (PK)\lsale_id (FK, UNIQUE)\luser_id (FK)\lnew_status\learning_paise\ladvance_paid_paise\ladjustment_paise\l}"];
+  withdrawals [label="{withdrawals|id (PK)\luser_id (FK)\lamount_paise\lstatus\lidempotency_key (UNIQUE)\lfailure_reason\l}"];
+  ledger_entries [label="{ledger_entries|id (PK)\luser_id (FK)\lentry_type\lamount_paise\lbalance_after_paise\lref_type\lref_id\l}"];
+
+  users -> wallets [label="1:1"];
+  users -> sales [label="1:N"];
+  brands -> sales [label="1:N"];
+  sales -> advance_payouts [label="1:0..1"];
+  sales -> reconciliations [label="1:0..1"];
+  users -> withdrawals [label="1:N"];
+  users -> ledger_entries [label="1:N"];
+}
