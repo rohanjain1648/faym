@@ -687,3 +687,42 @@ uvicorn app.main:app --reload
   withdrawal_debit            ₹-80  -> balance ₹0
   withdrawal_refund            ₹80  -> balance ₹80
 ```
+
+---
+
+## System diagrams
+
+### Architecture: four layers
+
+![Four-layer architecture diagram showing HTTP layer, composition root, services (wallet/advance/reconciliation/withdrawal), repositories, and SQLite database](docs/architecture.png)
+
+The HTTP layer (FastAPI routes) never touches SQL — it calls the container, which wires services over repositories. Every balance change flows through `WalletService.apply()`, the single writer of both the wallet balance and the audit ledger.
+
+### Data model
+
+![Entity-relationship diagram showing users, wallets, sales, brands, advance_payouts, reconciliations, withdrawals, and ledger_entries](docs/er_diagram.png)
+
+`advance_payouts.sale_id` and `reconciliations.sale_id` are both `UNIQUE` — that's what makes "a sale is advanced/settled at most once" a database guarantee, not just application logic.
+
+### Sale lifecycle (state machine)
+
+![Sale status state machine: pending → approved/rejected. Advance job runs as a self-loop on pending.](docs/SaleLifecycle.png)
+
+The advance job is a self-loop: it runs on pending sales but never changes their status, and `UNIQUE(sale_id)` prevents double-advances no matter how many times the job runs.
+
+### Withdrawal lifecycle (state machine)
+
+![Withdrawal status state machine: initiated → processing → completed/failed/cancelled/rejected. Failed/cancelled/rejected states auto-refund.](docs/WithdrawalLifecycle.png)
+
+Failed, cancelled, and rejected are `RECOVERABLE` states — each triggers exactly one refund. All four end states are `TERMINAL` — once reached, no further transitions are allowed, preventing refund double-fires.
+
+### Operation flows
+
+Four additional detailed flowcharts trace the exact decision logic inside each service:
+
+- [`AdvancePayoutFlow.png`](docs/AdvancePayoutFlow.png) — `POST /jobs/advance-payout`
+- [`ReconciliationFlow.png`](docs/ReconciliationFlow.png) — `POST /sales/{id}/reconcile`
+- [`WithdrawalRequestFlow.png`](docs/WithdrawalRequestFlow.png) — `POST /users/{id}/withdrawals`
+- [`WithdrawalStatusUpdateFlow.png`](docs/WithdrawalStatusUpdateFlow.png) — `POST /withdrawals/{id}/status`
+
+All eight diagrams are authored as portable **Graphviz DOT** files in [`docs/diagrams/`](docs/diagrams/) with render instructions.
